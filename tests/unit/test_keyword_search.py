@@ -131,16 +131,41 @@ class TestKeywordSearcher:
         assert result["source"] == "readme"
         assert result["custom"] == "value"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="issue #68 (manifest H-01): BM25 keyword search raises ZeroDivisionError on an empty index",
-    )
     def test_empty_index(self, searcher):
         """Test searching on empty index."""
         searcher.index([])
         results = searcher.search("python", top_k=10)
 
         assert results == []
+
+    def test_empty_index_clears_previous_index(self, searcher):
+        """Empty reindexing clears the prior model and search results."""
+        searcher.index([{"id": 1, "text": "python programming"}])
+        assert searcher.search("python")
+
+        searcher.index([])
+
+        assert searcher.bm25 is None
+        assert searcher.chunks == []
+        assert searcher.search("python") == []
+
+    def test_nonempty_index_after_empty_index(self, searcher):
+        """A searcher can build a working index after being emptied."""
+        searcher.index([])
+        searcher.index([{"id": 1, "text": "python programming"}])
+
+        results = searcher.search("python")
+
+        assert len(results) == 1
+        assert results[0]["id"] == 1
+        assert "bm25_score" in results[0]
+
+    def test_repeated_empty_index(self, searcher):
+        """Repeated empty indexing remains safe and searchable."""
+        searcher.index([])
+        searcher.index([])
+
+        assert searcher.search("python") == []
 
     def test_index_not_called_returns_empty(self, searcher):
         """Test searching without calling index first."""
